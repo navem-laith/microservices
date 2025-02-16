@@ -1,0 +1,7 @@
+FROM mysql:latest
+ENV MYSQL_ROOT_PASSWORD=utcnJoke
+ENV MYSQL_DATABASE=user_db
+ENV MYSQL_USER=laith
+ENV MYSQL_PASSWORD=utcnJoke
+EXPOSE 3306
+CMD ["mysqld"]

@@ -1,0 +1,152 @@
+services:
+  traefik:
+    image: traefik:v3.2
+    container_name: traefik
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --accesslog=true
+      - --accesslog.filepath=/var/log/traefik/access.log
+      - --log.level=DEBUG
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"    # HTTP traffic
+      - "8080:8080" # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - traefik_logs:/var/log/traefik
+    networks:
+      - laith_network
+
+  rabbitmq:
+    image: rabbitmq:3.11-management
+    container_name: rabbitmq
+    ports:
+      - '5672:5672' # Port for RabbitMQ messaging
+      - '15672:15672' # Port for RabbitMQ management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - laith_network
+
+  user_db:
+    build:
+      context: ./backendDatabaseUser    # User database folder
+      dockerfile: ./Dockerfile
+    container_name: user_db
+    ports:
+      - '3310:3306'                     # Expose user_db on port 3310
+    networks:
+      - laith_network
+    volumes:
+      - user-mysql-data:/var/lib/mysql  # Volume for User database
+
+  device_db:
+    build:
+      context: ./backendDatabaseDevice  # Device database folder
+      dockerfile: ./Dockerfile
+    container_name: device_db
+    ports:
+      - '3320:3306'                     # Expose device_db on port 3320
+    networks:
+      - laith_network
+    volumes:
+      - device-mysql-data:/var/lib/mysql  # Volume for Device database
+
+  monitor_db:
+    build:
+      context: ./backendDatabaseMonitor  # Device database folder
+      dockerfile: ./Dockerfile
+    container_name: monitor_db
+    ports:
+      - '3330:3306'                     # Expose device_db on port 3320
+    networks:
+      - laith_network
+    volumes:
+      - monitor-mysql-data:/var/lib/mysql  # Volume for Device database
+
+  user_spring:
+    build:
+      context: ./proiect1userBackend
+      dockerfile: Dockerfile
+    container_name: user_spring
+    networks:
+      - laith_network
+    depends_on:
+      - user_db
+      - device_spring
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.user.rule=Host(`user.localhost`)"
+      - "traefik.http.services.user.loadbalancer.server.port=8088"
+  
+  device_spring:
+    build:
+      context: ./proiect1deviceBackend
+      dockerfile: Dockerfile
+    container_name: device_spring
+    networks:
+      - laith_network
+    depends_on:
+      - device_db
+      - rabbitmq
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.device.rule=Host(`device.localhost`)"
+      - "traefik.http.services.device.loadbalancer.server.port=8081"
+
+  monitor_spring:
+    build:
+      context: ./monitor-app
+      dockerfile: Dockerfile
+    container_name: monitor_spring
+    networks:
+      - laith_network
+    depends_on:
+      - monitor_db
+      - rabbitmq
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.monitor.rule=Host(`monitor.localhost`)"
+      - "traefik.http.services.monitor.loadbalancer.server.port=8085"
+
+  chat_spring:
+    build:
+      context: ./chatBackend
+      dockerfile: Dockerfile
+    container_name: chat_spring
+    networks:
+      - laith_network
+    depends_on:
+      - user_db
+      - user_spring
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.monitor.rule=Host(`chat.localhost`)"
+      - "traefik.http.services.monitor.loadbalancer.server.port=8089"
+    
+  frontend:
+    build:
+      context: ./proiect1frontend
+      dockerfile: Dockerfile
+    container_name: user_frontend
+    networks:
+      - laith_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`frontend.localhost`)"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+
+networks:
+  laith_network:
+    driver: bridge
+
+volumes:
+  user-mysql-data: {}
+  device-mysql-data: {}
+  monitor-mysql-data: {}
+  traefik_logs: {}
+
+
+# keep in mind    host_port:container_port aka local:docker 
